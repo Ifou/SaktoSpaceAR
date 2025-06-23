@@ -39,6 +39,7 @@ class _LocalARViewerState extends State<LocalARViewer>
   bool _isLoading = true; // Add loading state
   bool _isModelLoading = false; // Track model loading state
   bool _isModelPlaced = false; // Track if model is permanently placed
+
   double _currentScale = 0.15; // Track current model scale
   final double _minScale = 0.05; // Minimum scale (5%)
   final double _maxScale = 1.0; // Maximum scale (100%)
@@ -468,7 +469,6 @@ class _LocalARViewerState extends State<LocalARViewer>
             _currentScale,
           ), // Use current scale variable
           position: Vector3(0.0, 0.0, 0.0),
-          rotation: Vector4(1.0, 0.0, 0.0, 0.0),
         );
 
         // Add the node to the anchor with timeout to prevent hanging
@@ -641,15 +641,14 @@ class _LocalARViewerState extends State<LocalARViewer>
       await arObjectManager!.removeNode(oldNode);
 
       // Small delay to ensure removal is processed
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // Create a new node with updated scale
+      await Future.delayed(
+        const Duration(milliseconds: 100),
+      ); // Create a new node with updated scale
       final newNode = ARNode(
         type: NodeType.localGLTF2,
         uri: widget.modelPath,
         scale: Vector3(_currentScale, _currentScale, _currentScale),
         position: Vector3(0.0, 0.0, 0.0),
-        rotation: Vector4(1.0, 0.0, 0.0, 0.0),
       ); // Add the new node to the existing anchor
       bool? success = await arObjectManager!.addNode(
         newNode,
