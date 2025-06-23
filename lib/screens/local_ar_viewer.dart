@@ -38,6 +38,11 @@ class _LocalARViewerState extends State<LocalARViewer>
   bool _isLoading = true; // Add loading state
   bool _isModelLoading = false; // Track model loading state
   bool _isModelPlaced = false; // Track if model is permanently placed
+  double _currentScale = 0.15; // Track current model scale
+  final double _minScale = 0.05; // Minimum scale (5%)
+  final double _maxScale = 1.0; // Maximum scale (100%)
+  bool _showSettings = false; // Track settings panel visibility
+  bool _isScaling = false; // Prevent concurrent scaling operations
 
   @override
   void initState() {
@@ -303,9 +308,156 @@ class _LocalARViewerState extends State<LocalARViewer>
                   ],
                 ),
               ),
+            ), // Settings Panel
+          if (_showSettings && _isModelPlaced)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showSettings = false;
+                  });
+                },
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        bottom: 100,
+                        right: 20,
+                        child: GestureDetector(
+                          onTap:
+                              () {}, // Prevent closing when tapping the panel
+                          child: Container(
+                            width: 300,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Header
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.tune,
+                                      color: Theme.of(context).primaryColor,
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'Model Settings',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+
+                                // Scale slider
+                                const Text(
+                                  'Scale',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Text(
+                                      '5%',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Slider(
+                                        value: _currentScale,
+                                        min: _minScale,
+                                        max: _maxScale,
+                                        divisions:
+                                            19, // 5% increments (95% range / 5% = 19)
+                                        activeColor: Theme.of(
+                                          context,
+                                        ).primaryColor,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _currentScale = value;
+                                          });
+                                          _updateModelScale();
+                                        },
+                                      ),
+                                    ),
+                                    const Text(
+                                      '100%',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  'Current: ${(_currentScale * 100).round()}%',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Theme.of(context).primaryColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Future settings placeholder
+                                const Divider(),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'More settings coming soon...',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
         ],
       ),
+      floatingActionButton: _isModelPlaced
+          ? FloatingActionButton(
+              onPressed: () {
+                setState(() {
+                  _showSettings = !_showSettings;
+                });
+              },
+              backgroundColor: Theme.of(context).primaryColor,
+              child: Icon(
+                _showSettings ? Icons.close : Icons.settings,
+                color: Colors.white,
+              ),
+              tooltip: _showSettings ? 'Close Settings' : 'Model Settings',
+            )
+          : null,
     );
   }
 
@@ -418,17 +570,17 @@ class _LocalARViewerState extends State<LocalARViewer>
       bool? didAddAnchor = await arAnchorManager!.addAnchor(newAnchor);
 
       if (didAddAnchor == true) {
-        anchors.add(newAnchor);
-
-        // Create node with optimized settings for better performance
+        anchors.add(
+          newAnchor,
+        ); // Create node with optimized settings for better performance
         var newNode = ARNode(
           type: NodeType.localGLTF2,
           uri: widget.modelPath,
           scale: Vector3(
-            0.15,
-            0.15,
-            0.15,
-          ), // Slightly smaller for better performance
+            _currentScale,
+            _currentScale,
+            _currentScale,
+          ), // Use current scale variable
           position: Vector3(0.0, 0.0, 0.0),
           rotation: Vector4(1.0, 0.0, 0.0, 0.0),
         );
@@ -583,5 +735,54 @@ class _LocalARViewerState extends State<LocalARViewer>
         ),
       );
     });
+  } // Model scaling method
+
+  void _updateModelScale() async {
+    if (nodes.isEmpty ||
+        arObjectManager == null ||
+        anchors.isEmpty ||
+        _isScaling)
+      return;
+
+    _isScaling = true; // Prevent concurrent scaling operations
+
+    try {
+      // Since updateNode might not be available, we'll recreate the node with new scale
+      final oldNode = nodes.first;
+      final anchor = anchors.first;
+
+      // Remove the old node and wait for completion
+      await arObjectManager!.removeNode(oldNode);
+
+      // Small delay to ensure removal is processed
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Create a new node with updated scale
+      final newNode = ARNode(
+        type: NodeType.localGLTF2,
+        uri: widget.modelPath,
+        scale: Vector3(_currentScale, _currentScale, _currentScale),
+        position: Vector3(0.0, 0.0, 0.0),
+        rotation: Vector4(1.0, 0.0, 0.0, 0.0),
+      ); // Add the new node to the existing anchor
+      bool? success = await arObjectManager!.addNode(
+        newNode,
+        planeAnchor: anchor as ARPlaneAnchor,
+      );
+
+      if (success == true) {
+        // Update the nodes list only after successful addition
+        nodes[0] = newNode;
+      } else {
+        // If failed to add new node, add the old one back
+        await arObjectManager!.addNode(oldNode, planeAnchor: anchor);
+        _showSnackBar('Failed to scale model', Colors.red);
+      }
+    } catch (e) {
+      print('Error updating model scale: $e');
+      _showSnackBar('Failed to scale model', Colors.red);
+    } finally {
+      _isScaling = false; // Reset the flag
+    }
   }
 }
