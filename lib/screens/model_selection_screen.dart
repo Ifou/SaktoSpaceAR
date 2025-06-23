@@ -3,7 +3,7 @@ import '../widgets/model_card.dart';
 import 'local_ar_viewer.dart';
 
 class ModelSelectionScreen extends StatelessWidget {
-  const ModelSelectionScreen({Key? key}) : super(key: key);
+  const ModelSelectionScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

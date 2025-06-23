@@ -3,7 +3,7 @@ import '../widgets/model_card.dart';
 
 /// Example showing how to use ModelCard in a custom screen
 class CustomModelBrowser extends StatelessWidget {
-  const CustomModelBrowser({Key? key}) : super(key: key);
+  const CustomModelBrowser({super.key});
 
   @override
   Widget build(BuildContext context) {

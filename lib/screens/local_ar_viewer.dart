@@ -17,10 +17,10 @@ class LocalARViewer extends StatefulWidget {
   final String modelName;
 
   const LocalARViewer({
-    Key? key,
+    super.key,
     required this.modelPath,
     required this.modelName,
-  }) : super(key: key);
+  });
 
   @override
   State<LocalARViewer> createState() => _LocalARViewerState();

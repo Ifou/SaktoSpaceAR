@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 class ModelCard extends StatefulWidget {
   final Function(String)? onModelSelected;
 
-  const ModelCard({Key? key, this.onModelSelected}) : super(key: key);
+  const ModelCard({super.key, this.onModelSelected});
 
   @override
   State<ModelCard> createState() => _ModelCardState();
