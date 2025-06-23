@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/model_card.dart';
-import 'local_ar_viewer.dart';
+import 'model_info_screen.dart';
 
 class ModelSelectionScreen extends StatelessWidget {
   const ModelSelectionScreen({super.key});
@@ -48,14 +48,12 @@ class ModelSelectionScreen extends StatelessWidget {
               ? '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}'
               : '',
         )
-        .join(' ');
-
-    // Navigate to local AR view with the selected model
+        .join(' '); // Navigate to model info screen with the selected model
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) =>
-            LocalARViewer(modelPath: modelPath, modelName: modelName),
+            ModelInfoScreen(modelPath: modelPath, modelName: modelName),
       ),
     );
   }
