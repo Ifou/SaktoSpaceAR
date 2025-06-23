@@ -37,6 +37,7 @@ class _LocalARViewerState extends State<LocalARViewer>
   bool _isPlacingModel = false; // Add flag to prevent rapid taps
   bool _isLoading = true; // Add loading state
   bool _isModelLoading = false; // Track model loading state
+  bool _isModelPlaced = false; // Track if model is permanently placed
 
   @override
   void initState() {
@@ -76,11 +77,13 @@ class _LocalARViewerState extends State<LocalARViewer>
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            onPressed: _resetView,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Reset View',
-          ),
+          // Only show reset button if model hasn't been placed yet
+          if (!_isModelPlaced)
+            IconButton(
+              onPressed: _resetView,
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Reset View',
+            ),
         ],
       ),
       body: Stack(
@@ -127,16 +130,17 @@ class _LocalARViewerState extends State<LocalARViewer>
                   ),
                 ),
               ),
-            ),
-
-          // Instructions overlay - optimized with AnimatedOpacity
-          if (!isARInitialized || nodes.isEmpty)
+            ), // Instructions overlay - only show when model hasn't been placed yet
+          if (!isARInitialized || (nodes.isEmpty && !_isModelPlaced))
             Positioned(
               top: 20,
               left: 20,
               right: 20,
               child: AnimatedOpacity(
-                opacity: (!isARInitialized || nodes.isEmpty) ? 1.0 : 0.0,
+                opacity:
+                    (!isARInitialized || (nodes.isEmpty && !_isModelPlaced))
+                    ? 1.0
+                    : 0.0,
                 duration: const Duration(milliseconds: 300),
                 child: Container(
                   padding: const EdgeInsets.all(16),
@@ -179,95 +183,127 @@ class _LocalARViewerState extends State<LocalARViewer>
                   ),
                 ),
               ),
-            ),
-
-          // Model info and controls
-          Positioned(
-            bottom: 40,
-            left: 20,
-            right: 20,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Model info card
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.view_in_ar,
-                        color: Theme.of(context).primaryColor,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              widget.modelName,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              nodes.isEmpty
-                                  ? 'No object placed'
-                                  : 'Object placed',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
+            ), // Model info and controls - hide controls after model is placed
+          if (!_isModelPlaced)
+            Positioned(
+              bottom: 40,
+              left: 20,
+              right: 20,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Model info card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Control button
-                if (nodes.isNotEmpty)
-                  ElevatedButton.icon(
-                    onPressed: _removeAllObjects,
-                    icon: const Icon(Icons.delete, size: 20),
-                    label: const Text(
-                      'Remove Object',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      ],
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.view_in_ar,
+                          color: Theme.of(context).primaryColor,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                widget.modelName,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                nodes.isEmpty
+                                    ? 'Ready to place'
+                                    : 'Object placed successfully!',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: nodes.isEmpty
+                                      ? Colors.grey[600]
+                                      : Colors.green[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
-          ),
+
+          // Success message after model is placed
+          if (_isModelPlaced)
+            Positioned(
+              bottom: 40,
+              left: 20,
+              right: 20,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${widget.modelName} Placed!',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const Text(
+                            'Model successfully placed in AR space',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -311,6 +347,9 @@ class _LocalARViewerState extends State<LocalARViewer>
   }
 
   Future<void> _removeAllObjects() async {
+    // Don't allow removal if model is permanently placed
+    if (_isModelPlaced) return;
+
     // Use optimized quiet removal and then show feedback
     await _removeAllObjectsQuietly();
 
@@ -329,6 +368,9 @@ class _LocalARViewerState extends State<LocalARViewer>
   Future<void> onPlaneOrPointTapped(
     List<ARHitTestResult> hitTestResults,
   ) async {
+    // Don't allow placement if model is already permanently placed
+    if (_isModelPlaced) return;
+
     // Prevent rapid tapping and multiple model placements
     if (_isPlacingModel || _isModelLoading) return;
 
@@ -353,12 +395,9 @@ class _LocalARViewerState extends State<LocalARViewer>
       _showSnackBar('Please tap on a detected plane', Colors.orange);
       return;
     }
-
     try {
-      // Remove existing model efficiently if one is already placed
-      if (anchors.isNotEmpty) {
-        await _removeAllObjectsQuietly(); // Use quiet removal to avoid extra UI updates
-      }
+      // Since we want permanent placement, don't remove existing models
+      // Just place the new one (though this shouldn't happen with _isModelPlaced check)
 
       // Create anchor in background to reduce main thread blocking
       await _createModelWithAnchor(planeHit);
@@ -399,20 +438,27 @@ class _LocalARViewerState extends State<LocalARViewer>
           newNode,
           newAnchor,
         );
-
         if (didAddNodeToAnchor == true) {
           nodes.add(newNode);
+
+          // Disable plane detection and finalize placement
+          await _finalizeModelPlacement();
 
           // Defer UI update to prevent blocking
           if (mounted) {
             Future.microtask(() {
               if (mounted) {
-                setState(() {});
+                setState(() {
+                  _isModelPlaced = true;
+                });
               }
             });
           }
 
-          _showSnackBar('${widget.modelName} placed!', Colors.green);
+          _showSnackBar(
+            '${widget.modelName} placed successfully!',
+            Colors.green,
+          );
         } else {
           // Clean up failed anchor
           await arAnchorManager!.removeAnchor(newAnchor);
@@ -455,6 +501,34 @@ class _LocalARViewerState extends State<LocalARViewer>
     }
   }
 
+  // Finalize model placement by disabling plane detection and interactions
+  Future<void> _finalizeModelPlacement() async {
+    try {
+      // Disable plane detection
+      if (arSessionManager != null) {
+        await arSessionManager!.onInitialize(
+          showFeaturePoints: false,
+          showPlanes: false, // Disable plane detection
+          showWorldOrigin: false,
+          handleTaps: false, // Disable tap handling
+        );
+
+        // Replace tap handlers with no-op functions to prevent further interactions
+        arSessionManager!.onPlaneOrPointTap =
+            (List<ARHitTestResult> hits) async {
+              // No-op: do nothing when tapped
+            };
+        if (arObjectManager != null) {
+          arObjectManager!.onNodeTap = (List<String> nodeIds) async {
+            // No-op: do nothing when node is tapped
+          };
+        }
+      }
+    } catch (e) {
+      print('Error finalizing placement: $e');
+    }
+  }
+
   // Quiet removal without UI feedback for better performance
   Future<void> _removeAllObjectsQuietly() async {
     try {
@@ -472,6 +546,9 @@ class _LocalARViewerState extends State<LocalARViewer>
   }
 
   void _resetView() {
+    // Prevent reset if model is permanently placed
+    if (_isModelPlaced) return;
+
     // Prevent multiple rapid resets
     if (_isPlacingModel || _isModelLoading) return;
 
