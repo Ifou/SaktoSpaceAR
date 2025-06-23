@@ -36,6 +36,7 @@ class _LocalARViewerState extends State<LocalARViewer>
   bool isARInitialized = false;
   bool _isPlacingModel = false; // Add flag to prevent rapid taps
   bool _isLoading = true; // Add loading state
+  bool _isModelLoading = false; // Track model loading state
 
   @override
   void initState() {
@@ -89,9 +90,7 @@ class _LocalARViewerState extends State<LocalARViewer>
             onARViewCreated: onARViewCreated,
             planeDetectionConfig: PlaneDetectionConfig
                 .horizontal, // Use only horizontal for better performance
-          ),
-
-          // Loading indicator while AR initializes
+          ), // Loading indicator while AR initializes
           if (_isLoading)
             const Positioned.fill(
               child: Center(
@@ -105,6 +104,27 @@ class _LocalARViewerState extends State<LocalARViewer>
                       style: TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ],
+                ),
+              ),
+            ),
+
+          // Model placement loading indicator
+          if (_isModelLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.3),
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(color: Colors.white),
+                      SizedBox(height: 16),
+                      Text(
+                        'Placing model...',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -261,37 +281,41 @@ class _LocalARViewerState extends State<LocalARViewer>
   ) {
     this.arSessionManager = arSessionManager;
     this.arObjectManager = arObjectManager;
-    this.arAnchorManager =
-        arAnchorManager; // Initialize AR session with performance-optimized settings
+    this.arAnchorManager = arAnchorManager;
+
+    // Initialize AR session with optimized settings for reduced lag
     this.arSessionManager!.onInitialize(
-      showFeaturePoints: false, // Disable feature points for better performance
-      showPlanes: true, // Keep plane detection for model placement
-      showWorldOrigin: false, // Disable world origin for better performance
+      showFeaturePoints: false, // Disabled for better performance
+      showPlanes: true, // Essential for model placement
+      showWorldOrigin: false, // Disabled for better performance
       handleTaps: true,
     );
 
-    this.arObjectManager!.onInitialize(); // Set up tap handlers
-    this.arSessionManager!.onPlaneOrPointTap = onPlaneOrPointTapped;
-    this.arObjectManager!.onNodeTap = onNodeTapped;
-    if (mounted) {
-      setState(() {
-        isARInitialized = true;
-        _isLoading = false; // AR is now loaded
-      });
-    }
+    // Initialize object manager asynchronously to reduce blocking
+    Future.microtask(() async {
+      if (mounted && this.arObjectManager != null) {
+        await this.arObjectManager!.onInitialize();
+
+        // Set up tap handlers after initialization
+        this.arSessionManager!.onPlaneOrPointTap = onPlaneOrPointTapped;
+        this.arObjectManager!.onNodeTap = onNodeTapped;
+
+        if (mounted) {
+          setState(() {
+            isARInitialized = true;
+            _isLoading = false;
+          });
+        }
+      }
+    });
   }
 
   Future<void> _removeAllObjects() async {
-    // Remove all anchors (which will also remove their associated nodes)
-    for (ARAnchor anchor in anchors) {
-      await arAnchorManager!.removeAnchor(anchor);
-    }
+    // Use optimized quiet removal and then show feedback
+    await _removeAllObjectsQuietly();
 
     if (mounted) {
-      setState(() {
-        anchors.clear();
-        nodes.clear();
-      });
+      setState(() {}); // Single setState call
     }
 
     _showSnackBar('Object removed', Colors.red);
@@ -305,10 +329,17 @@ class _LocalARViewerState extends State<LocalARViewer>
   Future<void> onPlaneOrPointTapped(
     List<ARHitTestResult> hitTestResults,
   ) async {
-    // Prevent rapid tapping for better performance
-    if (_isPlacingModel) return;
+    // Prevent rapid tapping and multiple model placements
+    if (_isPlacingModel || _isModelLoading) return;
 
     _isPlacingModel = true;
+
+    // Show loading state immediately for better UX
+    if (mounted) {
+      setState(() {
+        _isModelLoading = true;
+      });
+    }
 
     // Find the first plane hit result
     ARHitTestResult? planeHit;
@@ -318,17 +349,30 @@ class _LocalARViewerState extends State<LocalARViewer>
       );
     } catch (e) {
       // No plane hit found
-      _isPlacingModel = false;
+      _resetPlacementFlags();
       _showSnackBar('Please tap on a detected plane', Colors.orange);
       return;
     }
 
     try {
-      // Remove existing model if one is already placed
+      // Remove existing model efficiently if one is already placed
       if (anchors.isNotEmpty) {
-        await _removeAllObjects();
+        await _removeAllObjectsQuietly(); // Use quiet removal to avoid extra UI updates
       }
 
+      // Create anchor in background to reduce main thread blocking
+      await _createModelWithAnchor(planeHit);
+    } catch (e) {
+      print('Error placing model: $e');
+      _showSnackBar('Error: ${e.toString()}', Colors.red);
+    } finally {
+      _resetPlacementFlags();
+    }
+  }
+
+  // Optimized method to create model with anchor
+  Future<void> _createModelWithAnchor(ARHitTestResult planeHit) async {
+    try {
       // Create an anchor at the tapped location
       var newAnchor = ARPlaneAnchor(transformation: planeHit.worldTransform);
 
@@ -337,44 +381,101 @@ class _LocalARViewerState extends State<LocalARViewer>
       if (didAddAnchor == true) {
         anchors.add(newAnchor);
 
-        // Create a node for the selected model with optimized settings
+        // Create node with optimized settings for better performance
         var newNode = ARNode(
           type: NodeType.localGLTF2,
           uri: widget.modelPath,
-          scale: Vector3(0.2, 0.2, 0.2),
+          scale: Vector3(
+            0.15,
+            0.15,
+            0.15,
+          ), // Slightly smaller for better performance
           position: Vector3(0.0, 0.0, 0.0),
           rotation: Vector4(1.0, 0.0, 0.0, 0.0),
         );
 
-        // Add the node to the anchor
-        bool? didAddNodeToAnchor = await arObjectManager!.addNode(
+        // Add the node to the anchor with timeout to prevent hanging
+        bool? didAddNodeToAnchor = await _addNodeWithTimeout(
           newNode,
-          planeAnchor: newAnchor,
+          newAnchor,
         );
 
         if (didAddNodeToAnchor == true) {
           nodes.add(newNode);
-          if (mounted) setState(() {}); // Check if widget is still mounted
+
+          // Defer UI update to prevent blocking
+          if (mounted) {
+            Future.microtask(() {
+              if (mounted) {
+                setState(() {});
+              }
+            });
+          }
+
           _showSnackBar('${widget.modelName} placed!', Colors.green);
         } else {
-          // Remove the anchor if node creation failed
+          // Clean up failed anchor
           await arAnchorManager!.removeAnchor(newAnchor);
           anchors.remove(newAnchor);
-          _showSnackBar('Failed to place model on anchor', Colors.red);
+          _showSnackBar('Failed to place model', Colors.red);
         }
       } else {
         _showSnackBar('Failed to create anchor', Colors.red);
       }
     } catch (e) {
-      print('Error placing model: $e');
-      _showSnackBar('Error: ${e.toString()}', Colors.red);
-    } finally {
-      _isPlacingModel = false; // Reset flag
+      print('Error in _createModelWithAnchor: $e');
+      _showSnackBar('Placement failed', Colors.red);
+      rethrow;
+    }
+  }
+
+  // Add node with timeout to prevent hanging
+  Future<bool?> _addNodeWithTimeout(ARNode node, ARAnchor anchor) async {
+    try {
+      return await Future.any([
+        arObjectManager!.addNode(node, planeAnchor: anchor as ARPlaneAnchor),
+        Future.delayed(
+          const Duration(seconds: 5),
+          () => false,
+        ), // 5 second timeout
+      ]);
+    } catch (e) {
+      print('Error adding node: $e');
+      return false;
+    }
+  }
+
+  // Reset placement flags efficiently
+  void _resetPlacementFlags() {
+    _isPlacingModel = false;
+    if (mounted) {
+      setState(() {
+        _isModelLoading = false;
+      });
+    }
+  }
+
+  // Quiet removal without UI feedback for better performance
+  Future<void> _removeAllObjectsQuietly() async {
+    try {
+      // Remove anchors in parallel for better performance
+      if (anchors.isNotEmpty) {
+        await Future.wait(
+          anchors.map((anchor) => arAnchorManager!.removeAnchor(anchor)),
+        );
+        anchors.clear();
+        nodes.clear();
+      }
+    } catch (e) {
+      print('Error removing objects: $e');
     }
   }
 
   void _resetView() {
-    // Remove all objects by calling _removeAllObjects
+    // Prevent multiple rapid resets
+    if (_isPlacingModel || _isModelLoading) return;
+
+    // Remove all objects by calling optimized _removeAllObjects
     _removeAllObjects();
     _showSnackBar('View reset', Colors.grey);
   }
@@ -382,15 +483,28 @@ class _LocalARViewerState extends State<LocalARViewer>
   void _showSnackBar(String message, Color color) {
     if (!mounted) return; // Don't show snackbar if widget is disposed
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-        duration: const Duration(
-          milliseconds: 1500,
-        ), // Reduced duration for better performance
-        behavior: SnackBarBehavior.floating, // Less resource intensive
-      ),
-    );
+    // Use postFrameCallback to defer snackbar creation to prevent blocking
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).clearSnackBars(); // Clear existing to prevent queue buildup
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: const TextStyle(
+              fontSize: 14,
+            ), // Smaller text for better performance
+          ),
+          backgroundColor: color,
+          duration: const Duration(milliseconds: 1200), // Reduced duration
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(8), // Smaller margin
+          elevation: 2, // Reduced elevation for better performance
+        ),
+      );
+    });
   }
 }
