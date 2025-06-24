@@ -11,6 +11,7 @@ import 'package:ar_flutter_plugin_2/datatypes/hittest_result_types.dart';
 import 'package:ar_flutter_plugin_2/models/ar_node.dart';
 import 'package:ar_flutter_plugin_2/models/ar_hittest_result.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors;
+import 'package:permission_handler/permission_handler.dart';
 import '../widgets/ar_settings_panel.dart';
 
 class LocalARViewer extends StatefulWidget {
@@ -39,17 +40,19 @@ class _LocalARViewerState extends State<LocalARViewer>
   bool _isLoading = true; // Add loading state
   bool _isModelLoading = false; // Track model loading state
   bool _isModelPlaced = false; // Track if model is permanently placed
+  bool _hasPermissions = false; // Track camera permission status
+  bool _showPermissionError = false; // Show permission error state
 
   double _currentScale = 0.15; // Track current model scale
   final double _minScale = 0.05; // Minimum scale (5%)
   final double _maxScale = 1.0; // Maximum scale (100%)
   bool _showSettings = false; // Track settings panel visibility
   bool _isScaling = false; // Prevent concurrent scaling operations
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this); // Observe app lifecycle
+    _checkPermissions(); // Check camera permissions before AR initialization
   }
 
   @override
@@ -95,13 +98,75 @@ class _LocalARViewerState extends State<LocalARViewer>
       ),
       body: Stack(
         children: [
-          // AR View
-          ARView(
-            onARViewCreated: onARViewCreated,
-            planeDetectionConfig: PlaneDetectionConfig
-                .horizontal, // Use only horizontal for better performance
-          ), // Loading indicator while AR initializes
-          if (_isLoading)
+          // AR View - only show when permissions are granted
+          if (_hasPermissions)
+            ARView(
+              onARViewCreated: onARViewCreated,
+              planeDetectionConfig: PlaneDetectionConfig
+                  .horizontal, // Use only horizontal for better performance
+            ),
+
+          // Permission error screen
+          if (_showPermissionError)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black87,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.camera_alt_outlined,
+                          color: Colors.white,
+                          size: 64,
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Camera Permission Required',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'This app needs camera access to provide AR functionality. Please grant camera permission to continue.',
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 32),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton(
+                              onPressed: _checkPermissions,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).primaryColor,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Try Again'),
+                            ),
+                            ElevatedButton(
+                              onPressed: _openAppSettings,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Open Settings'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ), // Loading indicator while AR initializes
+          if (_isLoading && _hasPermissions && !_showPermissionError)
             const Positioned.fill(
               child: Center(
                 child: Column(
@@ -354,6 +419,12 @@ class _LocalARViewerState extends State<LocalARViewer>
     ARAnchorManager arAnchorManager,
     ARLocationManager arLocationManager,
   ) {
+    // Only proceed if we have camera permissions
+    if (!_hasPermissions) {
+      print('AR View created but no camera permissions');
+      return;
+    }
+
     this.arSessionManager = arSessionManager;
     this.arObjectManager = arObjectManager;
     this.arAnchorManager = arAnchorManager;
@@ -368,7 +439,7 @@ class _LocalARViewerState extends State<LocalARViewer>
 
     // Initialize object manager asynchronously to reduce blocking
     Future.microtask(() async {
-      if (mounted && this.arObjectManager != null) {
+      if (mounted && this.arObjectManager != null && _hasPermissions) {
         await this.arObjectManager!.onInitialize();
 
         // Set up tap handlers after initialization
@@ -669,5 +740,43 @@ class _LocalARViewerState extends State<LocalARViewer>
     } finally {
       _isScaling = false; // Reset the flag
     }
+  }
+
+  // Check camera permissions before initializing AR
+  Future<void> _checkPermissions() async {
+    try {
+      final status = await Permission.camera.status;
+
+      if (status.isGranted) {
+        setState(() {
+          _hasPermissions = true;
+          _showPermissionError = false;
+        });
+      } else if (status.isDenied) {
+        // Request permission
+        final result = await Permission.camera.request();
+        setState(() {
+          _hasPermissions = result.isGranted;
+          _showPermissionError = !result.isGranted;
+        });
+      } else {
+        // Permission permanently denied
+        setState(() {
+          _hasPermissions = false;
+          _showPermissionError = true;
+        });
+      }
+    } catch (e) {
+      print('Error checking permissions: $e');
+      setState(() {
+        _hasPermissions = false;
+        _showPermissionError = true;
+      });
+    }
+  }
+
+  // Open app settings for permission management
+  Future<void> _openAppSettings() async {
+    await openAppSettings();
   }
 }
