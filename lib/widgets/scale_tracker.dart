@@ -69,10 +69,10 @@ class ScaleTracker extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.75),
+              color: Colors.black.withValues(alpha: 0.75),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: primaryColor.withOpacity(0.3),
+                color: primaryColor.withValues(alpha: 0.3),
                 width: 1,
               ),
             ),
@@ -203,13 +203,13 @@ class ScaleTracker extends StatelessWidget {
   /// Returns color based on current scale for visual feedback
   Color _getScaleColor() {
     if (currentScale < 0.2) {
-      return Colors.red.withOpacity(0.8); // Very small
+      return Colors.red.withValues(alpha: 0.8); // Very small
     } else if (currentScale < 0.5) {
-      return Colors.orange.withOpacity(0.8); // Small
+      return Colors.orange.withValues(alpha: 0.8); // Small
     } else if (currentScale < 0.8) {
-      return Colors.green.withOpacity(0.8); // Good size
+      return Colors.green.withValues(alpha: 0.8); // Good size
     } else {
-      return Colors.blue.withOpacity(0.8); // Large
+      return Colors.blue.withValues(alpha: 0.8); // Large
     }
   }
 }
@@ -265,7 +265,7 @@ class DetailedScaleTracker extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -303,7 +303,7 @@ class DetailedScaleTracker extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor.withOpacity(0.1),
+                      color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
