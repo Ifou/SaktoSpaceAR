@@ -57,6 +57,11 @@ class _LocalARViewerState extends State<LocalARViewer>
   double _baseModelWidth = 1.0; // Base model width in meters (at 100% scale)
   double _baseModelHeight = 1.0; // Base model height in meters (at 100% scale)
   double _baseModelDepth = 1.0; // Base model depth in meters (at 100% scale)
+
+  // Reset functionality
+  bool _isResetting = false; // Track reset operation state
+  Function(List<ARHitTestResult>)?
+  _originalPlaneCallback; // Store original plane callback
   @override
   void initState() {
     super.initState();
@@ -402,6 +407,13 @@ class _LocalARViewerState extends State<LocalARViewer>
                   _showSettings = false;
                 });
               },
+              onReset: () {
+                setState(() {
+                  _showSettings = false; // Close settings panel
+                });
+                _showResetConfirmation(); // Show reset confirmation
+              },
+              isResetting: _isResetting,
             ),
 
           // Scale Tracker - positioned on the left side
@@ -512,6 +524,29 @@ class _LocalARViewerState extends State<LocalARViewer>
                 if (_showScaleTracker && !_showDetailedTracker)
                   const SizedBox(height: 8),
 
+                // Reset Button
+                FloatingActionButton(
+                  mini: true,
+                  onPressed: _isResetting
+                      ? null
+                      : () => _showResetConfirmation(),
+                  backgroundColor: _isResetting ? Colors.grey : Colors.red,
+                  child: _isResetting
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : Icon(Icons.refresh, color: Colors.white, size: 20),
+                  tooltip: 'Reset AR Session',
+                ),
+                const SizedBox(height: 8),
+
                 // Settings Toggle
                 FloatingActionButton(
                   onPressed: () {
@@ -555,6 +590,9 @@ class _LocalARViewerState extends State<LocalARViewer>
       showWorldOrigin: false, // Disabled for better performance
       handleTaps: true,
     );
+
+    // Store the original plane callback for reset functionality
+    _originalPlaneCallback = onPlaneOrPointTapped;
 
     // Initialize object manager asynchronously to reduce blocking
     Future.microtask(() async {
@@ -785,34 +823,167 @@ class _LocalARViewerState extends State<LocalARViewer>
     _showSnackBar('View reset', Colors.grey);
   }
 
-  void _showSnackBar(String message, Color color) {
-    if (!mounted) return; // Don't show snackbar if widget is disposed
+  // Comprehensive reset function that works even after model is placed
+  Future<void> _resetARSession() async {
+    try {
+      // Show loading indicator
+      setState(() {
+        _isResetting = true;
+      });
 
-    // Use postFrameCallback to defer snackbar creation to prevent blocking
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      // 1. Remove all existing nodes
+      if (nodes.isNotEmpty && arObjectManager != null) {
+        for (var node in nodes) {
+          await arObjectManager!.removeNode(node);
+        }
+        nodes.clear();
+      }
 
-      ScaffoldMessenger.of(
-        context,
-      ).clearSnackBars(); // Clear existing to prevent queue buildup
+      // 2. Remove all anchors
+      if (anchors.isNotEmpty && arAnchorManager != null) {
+        for (var anchor in anchors) {
+          await arAnchorManager!.removeAnchor(anchor);
+        }
+        anchors.clear();
+      }
+
+      // 3. Re-enable plane detection
+      if (arSessionManager != null) {
+        await arSessionManager!.onInitialize(
+          showFeaturePoints: false,
+          showPlanes: true, // Re-enable plane detection
+          showWorldOrigin: false,
+          handleTaps: true,
+        );
+
+        // Restore original tap handler
+        if (_originalPlaneCallback != null) {
+          arSessionManager!.onPlaneOrPointTap = _originalPlaneCallback!;
+        }
+      }
+
+      // 4. Reset all state variables
+      setState(() {
+        _isModelPlaced = false;
+        _isResetting = false;
+        _currentScale = 0.15; // Reset scale to default
+        _showSettings = false; // Close settings panel
+
+        // Reset any other states as needed
+        _isPlacingModel = false;
+        _isModelLoading = false;
+        _isScaling = false;
+      });
+
+      // 5. Show success feedback
+      _showResetFeedback();
+
+      print('AR session reset successfully');
+    } catch (e) {
+      print('Error resetting AR session: $e');
+      setState(() {
+        _isResetting = false;
+      });
+
+      // Show error feedback
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            message,
-            style: const TextStyle(
-              fontSize: 14,
-            ), // Smaller text for better performance
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Reset failed. Please try again.'),
+            ],
           ),
-          backgroundColor: color,
-          duration: const Duration(milliseconds: 1200), // Reduced duration
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(8), // Smaller margin
-          elevation: 2, // Reduced elevation for better performance
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
         ),
       );
-    });
-  } // Model scaling method
+    }
+  }
 
+  void _showResetFeedback() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.refresh, color: Colors.white),
+            SizedBox(width: 8),
+            Text('Session reset! Tap on a plane to place model again.'),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showResetConfirmation() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.refresh, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Reset AR Session'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('This will:'),
+              SizedBox(height: 8),
+              _buildResetFeature('• Remove the current model'),
+              _buildResetFeature('• Re-enable plane detection'),
+              _buildResetFeature('• Reset scale to default'),
+              _buildResetFeature('• Clear all AR anchors'),
+              SizedBox(height: 12),
+              Text(
+                'You can place the model again after reset.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _resetARSession();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('Reset'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildResetFeature(String text) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 2),
+      child: Text(text, style: TextStyle(fontSize: 14)),
+    );
+  }
+
+  // Model scaling method
   void _updateModelScale() async {
     if (nodes.isEmpty ||
         arObjectManager == null ||
@@ -897,6 +1068,34 @@ class _LocalARViewerState extends State<LocalARViewer>
   // Open app settings for permission management
   Future<void> _openAppSettings() async {
     await openAppSettings();
+  }
+
+  void _showSnackBar(String message, Color color) {
+    if (!mounted) return; // Don't show snackbar if widget is disposed
+
+    // Use postFrameCallback to defer snackbar creation to prevent blocking
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).clearSnackBars(); // Clear existing to prevent queue buildup
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: const TextStyle(
+              fontSize: 14,
+            ), // Smaller text for better performance
+          ),
+          backgroundColor: color,
+          duration: const Duration(milliseconds: 1200), // Reduced duration
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(8), // Smaller margin
+          elevation: 2, // Reduced elevation for better performance
+        ),
+      );
+    });
   }
 
   /// Configure base model dimensions based on the model being viewed

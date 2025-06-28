@@ -21,6 +21,12 @@ class ARSettingsPanel extends StatelessWidget {
   /// Callback function called when panel should be closed
   final VoidCallback onClose;
 
+  /// Callback function called when reset is requested
+  final VoidCallback? onReset;
+
+  /// Whether reset operation is in progress
+  final bool isResetting;
+
   const ARSettingsPanel({
     super.key,
     required this.currentScale,
@@ -28,6 +34,8 @@ class ARSettingsPanel extends StatelessWidget {
     required this.maxScale,
     required this.onScaleChanged,
     required this.onClose,
+    this.onReset,
+    this.isResetting = false,
   });
 
   @override
@@ -130,17 +138,71 @@ class ARSettingsPanel extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
 
-                        // Future settings placeholder
+                        // Reset Section
                         const Divider(),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'More settings coming soon...',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                            fontStyle: FontStyle.italic,
+                        const SizedBox(height: 16),
+
+                        if (onReset != null) ...[
+                          const Text(
+                            'Session Controls',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 12),
+
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: isResetting ? null : onReset,
+                              icon: isResetting
+                                  ? SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                      ),
+                                    )
+                                  : Icon(Icons.refresh),
+                              label: Text(
+                                isResetting
+                                    ? 'Resetting...'
+                                    : 'Reset AR Session',
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          Text(
+                            'This will remove the model and re-enable plane detection',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ] else ...[
+                          const Text(
+                            'More settings coming soon...',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
