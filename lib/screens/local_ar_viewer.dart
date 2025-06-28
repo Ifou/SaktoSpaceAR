@@ -15,7 +15,6 @@ import 'package:ar_flutter_plugin_2/models/ar_hittest_result.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors;
 import 'package:permission_handler/permission_handler.dart';
 import '../widgets/ar_settings_panel.dart';
-import '../widgets/scale_tracker.dart';
 
 class LocalARViewer extends StatefulWidget {
   final String modelPath;
@@ -55,10 +54,8 @@ class _LocalARViewerState extends State<LocalARViewer>
   // Scale tracker configuration
   bool _showScaleTracker = true; // Show/hide scale tracker
   bool _useMetricUnits = true; // Toggle between metric and imperial units
-  bool _showDetailedTracker = false; // Show detailed tracker with depth
   double _baseModelWidth = 1.0; // Base model width in meters (at 100% scale)
   double _baseModelHeight = 1.0; // Base model height in meters (at 100% scale)
-  double _baseModelDepth = 1.0; // Base model depth in meters (at 100% scale)
 
   // Reset functionality
   bool _isResetting = false; // Track reset operation state
@@ -427,40 +424,67 @@ class _LocalARViewerState extends State<LocalARViewer>
               isResetting: _isResetting,
             ),
 
-          // Scale Tracker - positioned on the left side with performance optimization
-          if (_showScaleTracker && _isModelPlaced && !_showDetailedTracker)
-            RepaintBoundary(
-              child: ScaleTracker(
-                currentScale: _currentScale,
-                baseWidthMeters: _baseModelWidth,
-                baseHeightMeters: _baseModelHeight,
-                useMetricUnits: _useMetricUnits,
-                top: 100,
-                left: 20,
-                isVisible: _showScaleTracker,
-              ),
-            ),
-
-          // Detailed Scale Tracker - positioned on the right side with performance optimization
-          if (_showScaleTracker && _isModelPlaced && _showDetailedTracker)
-            RepaintBoundary(
-              child: Positioned(
-                top: 100,
-                right: 20,
-                child: DetailedScaleTracker(
-                  currentScale: _currentScale,
-                  modelName: widget.modelName,
-                  baseWidthMeters: _baseModelWidth,
-                  baseHeightMeters: _baseModelHeight,
-                  baseDepthMeters: _baseModelDepth,
-                  useMetricUnits: _useMetricUnits,
-                  onToggleUnits: () {
-                    setState(() {
-                      _useMetricUnits = !_useMetricUnits;
-                    });
-                    HapticFeedback.lightImpact(); // Add haptic feedback
-                  },
-                  isVisible: _showScaleTracker,
+          // Scale Tracker - minimal safe implementation
+          if (_showScaleTracker && _isModelPlaced)
+            Positioned(
+              top: 100,
+              left: 20,
+              child: IgnorePointer(
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    width: 160,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: const Color(0xDD000000),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white24, width: 1),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.straighten, 
+                                     color: Colors.white, size: 14),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Scale Tracker',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Scale: ${(_currentScale * 100).round()}%',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                          ),
+                        ),
+                        Text(
+                          'Width: ${_formatDimension(_baseModelWidth * _currentScale)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                          ),
+                        ),
+                        Text(
+                          'Height: ${_formatDimension(_baseModelHeight * _currentScale)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -489,29 +513,8 @@ class _LocalARViewerState extends State<LocalARViewer>
                   ),
                   const SizedBox(height: 8),
 
-                  // Detailed Tracker Toggle
+                  // Units Toggle - simplified for basic scale tracker
                   if (_showScaleTracker)
-                    _buildOptimizedFAB(
-                      onPressed: () {
-                        setState(() {
-                          _showDetailedTracker = !_showDetailedTracker;
-                        });
-                        HapticFeedback.lightImpact();
-                      },
-                      backgroundColor: _showDetailedTracker
-                          ? Colors.purple
-                          : Colors.grey[600]!,
-                      icon: _showDetailedTracker
-                          ? Icons.view_list
-                          : Icons.view_compact,
-                      tooltip: _showDetailedTracker
-                          ? 'Simple View'
-                          : 'Detailed View',
-                    ),
-                  if (_showScaleTracker) const SizedBox(height: 8),
-
-                  // Units Toggle
-                  if (_showScaleTracker && !_showDetailedTracker)
                     _buildOptimizedFABWithText(
                       onPressed: () {
                         setState(() {
@@ -527,8 +530,7 @@ class _LocalARViewerState extends State<LocalARViewer>
                           ? 'Switch to Imperial'
                           : 'Switch to Metric',
                     ),
-                  if (_showScaleTracker && !_showDetailedTracker)
-                    const SizedBox(height: 8),
+                  if (_showScaleTracker) const SizedBox(height: 8),
 
                   // Reset Button
                   _buildOptimizedFAB(
@@ -1123,18 +1125,42 @@ class _LocalARViewerState extends State<LocalARViewer>
       // Chair dimensions (approximate)
       _baseModelWidth = 0.6; // 60cm wide
       _baseModelHeight = 0.9; // 90cm tall
-      _baseModelDepth = 0.6; // 60cm deep
     } else if (modelNameLower.contains('takodachi') ||
         modelNameLower.contains('miyako')) {
       // Character/figure dimensions (approximate)
       _baseModelWidth = 0.3; // 30cm wide
       _baseModelHeight = 1.6; // 160cm tall (human height)
-      _baseModelDepth = 0.2; // 20cm deep
     } else {
       // Default object dimensions
       _baseModelWidth = 1.0; // 1m wide
       _baseModelHeight = 1.0; // 1m tall
-      _baseModelDepth = 1.0; // 1m deep
+    }
+  }
+
+  /// Formats dimension value based on unit preference
+  String _formatDimension(double meters) {
+    if (_useMetricUnits) {
+      if (meters >= 1.0) {
+        return '${meters.toStringAsFixed(2)}m';
+      } else {
+        final centimeters = meters * 100;
+        return '${centimeters.toStringAsFixed(1)}cm';
+      }
+    } else {
+      // Convert to feet and inches
+      final feet = meters * 3.28084;
+      if (feet >= 1.0) {
+        final wholeFeet = feet.floor();
+        final inches = (feet - wholeFeet) * 12;
+        if (inches < 0.5) {
+          return '${wholeFeet}ft';
+        } else {
+          return '${wholeFeet}ft ${inches.toStringAsFixed(1)}in';
+        }
+      } else {
+        final inches = feet * 12;
+        return '${inches.toStringAsFixed(1)}in';
+      }
     }
   }
 

@@ -189,8 +189,12 @@ class _ModelCardState extends State<ModelCard> {
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                Theme.of(context).primaryColor.withOpacity(0.1),
-                                Theme.of(context).primaryColor.withOpacity(0.2),
+                                Theme.of(
+                                  context,
+                                ).primaryColor.withValues(alpha: 0.1),
+                                Theme.of(
+                                  context,
+                                ).primaryColor.withValues(alpha: 0.2),
                               ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
@@ -199,7 +203,7 @@ class _ModelCardState extends State<ModelCard> {
                             border: Border.all(
                               color: Theme.of(
                                 context,
-                              ).primaryColor.withOpacity(0.3),
+                              ).primaryColor.withValues(alpha: 0.3),
                               width: 2,
                             ),
                           ),

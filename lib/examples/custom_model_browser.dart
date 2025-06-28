@@ -19,7 +19,7 @@ class CustomModelBrowser extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
-            color: Colors.teal.withOpacity(0.1),
+            color: Colors.teal.withValues(alpha: 0.1),
             child: Column(
               children: [
                 const Icon(
@@ -76,7 +76,7 @@ class CustomModelBrowser extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.1),
+                color: Colors.teal.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(

@@ -17,18 +17,6 @@ class ScaleTracker extends StatelessWidget {
   /// Whether to show metric units (meters/centimeters)
   final bool useMetricUnits;
 
-  /// Position from the top of the screen
-  final double? top;
-
-  /// Position from the left of the screen
-  final double? left;
-
-  /// Position from the right of the screen
-  final double? right;
-
-  /// Position from the bottom of the screen
-  final double? bottom;
-
   /// Whether the tracker is currently visible
   final bool isVisible;
 
@@ -38,10 +26,6 @@ class ScaleTracker extends StatelessWidget {
     this.baseWidthMeters = 1.0,
     this.baseHeightMeters = 1.0,
     this.useMetricUnits = true,
-    this.top,
-    this.left,
-    this.right,
-    this.bottom,
     this.isVisible = true,
   });
 
@@ -52,99 +36,83 @@ class ScaleTracker extends StatelessWidget {
     // Pre-calculate dimensions to avoid repeated calculations
     final currentWidth = baseWidthMeters * currentScale;
     final currentHeight = baseHeightMeters * currentScale;
-    
-    // Cache theme data for performance
-    final theme = Theme.of(context);
-    final primaryColor = theme.primaryColor;
 
-    return Positioned(
-      top: top,
-      left: left,
-      right: right,
-      bottom: bottom,
-      child: AnimatedOpacity(
-        opacity: isVisible ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 300),
-        child: RepaintBoundary(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.75),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: primaryColor.withValues(alpha: 0.3),
-                width: 1,
-              ),
-            ),
-            child: Column(
+    // Create a minimally sized, non-expandable widget
+    return SizedBox(
+      width: 180, // Fixed width
+      height: 120, // Fixed height to prevent expansion
+      child: Container(
+        width: 180,
+        height: 120,
+        decoration: BoxDecoration(
+          color: const Color(0xDD000000), // Semi-transparent black
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white24, width: 1),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.straighten,
-                      color: primaryColor,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'Scale Tracker',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // Scale percentage with optimized text
-                _buildInfoRow(
-                  icon: Icons.zoom_in,
-                  text: 'Scale: ${(currentScale * 100).round()}%',
-                ),
-                const SizedBox(height: 4),
-
-                // Width measurement
-                _buildInfoRow(
-                  icon: Icons.width_normal,
-                  text: 'Width: ${_formatDimension(currentWidth)}',
-                ),
-                const SizedBox(height: 2),
-
-                // Height measurement
-                _buildInfoRow(
-                  icon: Icons.height,
-                  text: 'Height: ${_formatDimension(currentHeight)}',
-                ),
-
-                // Scale factor indicator with optimized rendering
-                const SizedBox(height: 4),
-                Container(
-                  width: 120,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(2),
-                    color: Colors.white24,
-                  ),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: currentScale,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(2),
-                        color: _getScaleColor(),
-                      ),
-                    ),
+                const Icon(Icons.straighten, color: Colors.white, size: 16),
+                const SizedBox(width: 6),
+                const Text(
+                  'Scale Tracker',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 8),
+
+            // Scale percentage with optimized text
+            _buildInfoRow(
+              icon: Icons.zoom_in,
+              text: 'Scale: ${(currentScale * 100).round()}%',
+            ),
+            const SizedBox(height: 4),
+
+            // Width measurement
+            _buildInfoRow(
+              icon: Icons.width_normal,
+              text: 'Width: ${_formatDimension(currentWidth)}',
+            ),
+            const SizedBox(height: 2),
+
+            // Height measurement
+            _buildInfoRow(
+              icon: Icons.height,
+              text: 'Height: ${_formatDimension(currentHeight)}',
+            ),
+
+            // Scale factor indicator with optimized rendering
+            const SizedBox(height: 4),
+            Container(
+              width: 120,
+              height: 4,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+                color: Colors.white24,
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: currentScale,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    color: _getScaleColor(),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -155,11 +123,7 @@ class ScaleTracker extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          color: Colors.white70,
-          size: 16,
-        ),
+        Icon(icon, color: Colors.white70, size: 16),
         const SizedBox(width: 6),
         Text(
           text,
@@ -257,103 +221,110 @@ class DetailedScaleTracker extends StatelessWidget {
     final currentHeight = baseHeightMeters * currentScale;
     final currentDepth = baseDepthMeters * currentScale;
 
-    return Container(
+    return SizedBox(
       width: 280,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            children: [
-              Icon(
-                Icons.aspect_ratio,
-                color: Theme.of(context).primaryColor,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Dimensions - $modelName',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+      height: 350,
+      child: Container(
+        width: 280,
+        height: 350,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Icon(
+                  Icons.aspect_ratio,
+                  color: Theme.of(context).primaryColor,
+                  size: 20,
                 ),
-              ),
-              if (onToggleUnits != null)
-                InkWell(
-                  onTap: onToggleUnits,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Dimensions - $modelName',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      useMetricUnits ? 'M' : 'FT',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).primaryColor,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (onToggleUnits != null)
+                  InkWell(
+                    onTap: onToggleUnits,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        useMetricUnits ? 'M' : 'FT',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Scale info
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                const Text(
-                  'Scale:',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                const Spacer(),
-                Text(
-                  '${(currentScale * 100).round()}%',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).primaryColor,
-                  ),
-                ),
               ],
             ),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-          // Dimensions
-          _buildDimensionRow('Width', currentWidth, Icons.width_normal),
-          const SizedBox(height: 8),
-          _buildDimensionRow('Height', currentHeight, Icons.height),
-          const SizedBox(height: 8),
-          _buildDimensionRow('Depth', currentDepth, Icons.straighten),
-        ],
+            // Scale info
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    'Scale:',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${(currentScale * 100).round()}%',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Dimensions
+            _buildDimensionRow('Width', currentWidth, Icons.width_normal),
+            const SizedBox(height: 8),
+            _buildDimensionRow('Height', currentHeight, Icons.height),
+            const SizedBox(height: 8),
+            _buildDimensionRow('Depth', currentDepth, Icons.straighten),
+          ],
+        ),
       ),
     );
   }

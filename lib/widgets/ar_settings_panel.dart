@@ -44,7 +44,7 @@ class ARSettingsPanel extends StatelessWidget {
       child: GestureDetector(
         onTap: onClose,
         child: Container(
-          color: Colors.black.withOpacity(0.3),
+          color: Colors.black.withValues(alpha: 0.3),
           child: Stack(
             children: [
               Positioned(
@@ -60,7 +60,7 @@ class ARSettingsPanel extends StatelessWidget {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withValues(alpha: 0.2),
                           blurRadius: 10,
                           offset: const Offset(0, 5),
                         ),
