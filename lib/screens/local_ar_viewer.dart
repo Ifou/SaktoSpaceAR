@@ -13,6 +13,7 @@ import 'package:ar_flutter_plugin_2/models/ar_hittest_result.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors;
 import 'package:permission_handler/permission_handler.dart';
 import '../widgets/ar_settings_panel.dart';
+import '../widgets/scale_tracker.dart';
 
 class LocalARViewer extends StatefulWidget {
   final String modelPath;
@@ -48,10 +49,19 @@ class _LocalARViewerState extends State<LocalARViewer>
   final double _maxScale = 1.0; // Maximum scale (100%)
   bool _showSettings = false; // Track settings panel visibility
   bool _isScaling = false; // Prevent concurrent scaling operations
+
+  // Scale tracker configuration
+  bool _showScaleTracker = true; // Show/hide scale tracker
+  bool _useMetricUnits = true; // Toggle between metric and imperial units
+  bool _showDetailedTracker = false; // Show detailed tracker with depth
+  double _baseModelWidth = 1.0; // Base model width in meters (at 100% scale)
+  double _baseModelHeight = 1.0; // Base model height in meters (at 100% scale)
+  double _baseModelDepth = 1.0; // Base model depth in meters (at 100% scale)
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this); // Observe app lifecycle
+    _configureModelDimensions(); // Set appropriate base dimensions
     _checkPermissions(); // Check camera permissions before AR initialization
   }
 
@@ -393,21 +403,130 @@ class _LocalARViewerState extends State<LocalARViewer>
                 });
               },
             ),
+
+          // Scale Tracker - positioned on the left side
+          if (_showScaleTracker && _isModelPlaced && !_showDetailedTracker)
+            ScaleTracker(
+              currentScale: _currentScale,
+              baseWidthMeters: _baseModelWidth,
+              baseHeightMeters: _baseModelHeight,
+              useMetricUnits: _useMetricUnits,
+              top: 100,
+              left: 20,
+              isVisible: _showScaleTracker,
+            ),
+
+          // Detailed Scale Tracker - positioned on the right side
+          if (_showScaleTracker && _isModelPlaced && _showDetailedTracker)
+            Positioned(
+              top: 100,
+              right: 20,
+              child: DetailedScaleTracker(
+                currentScale: _currentScale,
+                modelName: widget.modelName,
+                baseWidthMeters: _baseModelWidth,
+                baseHeightMeters: _baseModelHeight,
+                baseDepthMeters: _baseModelDepth,
+                useMetricUnits: _useMetricUnits,
+                onToggleUnits: () {
+                  setState(() {
+                    _useMetricUnits = !_useMetricUnits;
+                  });
+                },
+                isVisible: _showScaleTracker,
+              ),
+            ),
         ],
       ),
       floatingActionButton: _isModelPlaced
-          ? FloatingActionButton(
-              onPressed: () {
-                setState(() {
-                  _showSettings = !_showSettings;
-                });
-              },
-              backgroundColor: Theme.of(context).primaryColor,
-              child: Icon(
-                _showSettings ? Icons.close : Icons.settings,
-                color: Colors.white,
-              ),
-              tooltip: _showSettings ? 'Close Settings' : 'Model Settings',
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Scale Tracker Toggle
+                FloatingActionButton(
+                  mini: true,
+                  onPressed: () {
+                    setState(() {
+                      _showScaleTracker = !_showScaleTracker;
+                    });
+                  },
+                  backgroundColor: _showScaleTracker
+                      ? Theme.of(context).primaryColor
+                      : Colors.grey,
+                  child: Icon(Icons.straighten, color: Colors.white, size: 20),
+                  tooltip: _showScaleTracker
+                      ? 'Hide Scale Tracker'
+                      : 'Show Scale Tracker',
+                ),
+                const SizedBox(height: 8),
+
+                // Detailed Tracker Toggle (only show when scale tracker is visible)
+                if (_showScaleTracker)
+                  FloatingActionButton(
+                    mini: true,
+                    onPressed: () {
+                      setState(() {
+                        _showDetailedTracker = !_showDetailedTracker;
+                      });
+                    },
+                    backgroundColor: _showDetailedTracker
+                        ? Colors.purple
+                        : Colors.grey[600],
+                    child: Icon(
+                      _showDetailedTracker
+                          ? Icons.view_list
+                          : Icons.view_compact,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    tooltip: _showDetailedTracker
+                        ? 'Simple View'
+                        : 'Detailed View',
+                  ),
+                if (_showScaleTracker) const SizedBox(height: 8),
+
+                // Units Toggle (only show when scale tracker is visible and not in detailed mode)
+                if (_showScaleTracker && !_showDetailedTracker)
+                  FloatingActionButton(
+                    mini: true,
+                    onPressed: () {
+                      setState(() {
+                        _useMetricUnits = !_useMetricUnits;
+                      });
+                    },
+                    backgroundColor: _useMetricUnits
+                        ? Colors.green
+                        : Colors.orange,
+                    child: Text(
+                      _useMetricUnits ? 'M' : 'FT',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    tooltip: _useMetricUnits
+                        ? 'Switch to Imperial'
+                        : 'Switch to Metric',
+                  ),
+                if (_showScaleTracker && !_showDetailedTracker)
+                  const SizedBox(height: 8),
+
+                // Settings Toggle
+                FloatingActionButton(
+                  onPressed: () {
+                    setState(() {
+                      _showSettings = !_showSettings;
+                    });
+                  },
+                  backgroundColor: Theme.of(context).primaryColor,
+                  child: Icon(
+                    _showSettings ? Icons.close : Icons.settings,
+                    color: Colors.white,
+                  ),
+                  tooltip: _showSettings ? 'Close Settings' : 'Model Settings',
+                ),
+              ],
             )
           : null,
     );
@@ -778,5 +897,30 @@ class _LocalARViewerState extends State<LocalARViewer>
   // Open app settings for permission management
   Future<void> _openAppSettings() async {
     await openAppSettings();
+  }
+
+  /// Configure base model dimensions based on the model being viewed
+  void _configureModelDimensions() {
+    // Set appropriate base dimensions based on model name/type
+    // These are rough estimates - in a real app you might load this from metadata
+    final modelNameLower = widget.modelName.toLowerCase();
+
+    if (modelNameLower.contains('chair')) {
+      // Chair dimensions (approximate)
+      _baseModelWidth = 0.6; // 60cm wide
+      _baseModelHeight = 0.9; // 90cm tall
+      _baseModelDepth = 0.6; // 60cm deep
+    } else if (modelNameLower.contains('takodachi') ||
+        modelNameLower.contains('miyako')) {
+      // Character/figure dimensions (approximate)
+      _baseModelWidth = 0.3; // 30cm wide
+      _baseModelHeight = 1.6; // 160cm tall (human height)
+      _baseModelDepth = 0.2; // 20cm deep
+    } else {
+      // Default object dimensions
+      _baseModelWidth = 1.0; // 1m wide
+      _baseModelHeight = 1.0; // 1m tall
+      _baseModelDepth = 1.0; // 1m deep
+    }
   }
 }
