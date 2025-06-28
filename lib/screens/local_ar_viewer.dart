@@ -64,7 +64,7 @@ class _LocalARViewerState extends State<LocalARViewer>
   bool _isResetting = false; // Track reset operation state
   Function(List<ARHitTestResult>)?
   _originalPlaneCallback; // Store original plane callback
-  
+
   // Performance optimization
   Timer? _scaleDebounceTimer; // Debounce scale updates
   late final String _modelPathCached; // Cache model path
@@ -213,7 +213,7 @@ class _LocalARViewerState extends State<LocalARViewer>
           if (_isModelLoading)
             Positioned.fill(
               child: Container(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
                 child: const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -243,7 +243,7 @@ class _LocalARViewerState extends State<LocalARViewer>
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
+                    color: Colors.black.withValues(alpha: 0.7),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
@@ -296,11 +296,11 @@ class _LocalARViewerState extends State<LocalARViewer>
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
@@ -357,11 +357,11 @@ class _LocalARViewerState extends State<LocalARViewer>
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.9),
+                  color: Colors.green.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -532,10 +532,12 @@ class _LocalARViewerState extends State<LocalARViewer>
 
                   // Reset Button
                   _buildOptimizedFAB(
-                    onPressed: _isResetting ? null : () {
-                      _showResetConfirmation();
-                      HapticFeedback.mediumImpact();
-                    },
+                    onPressed: _isResetting
+                        ? null
+                        : () {
+                            _showResetConfirmation();
+                            HapticFeedback.mediumImpact();
+                          },
                     backgroundColor: _isResetting ? Colors.grey : Colors.red,
                     icon: Icons.refresh,
                     tooltip: 'Reset AR Session',
@@ -553,7 +555,9 @@ class _LocalARViewerState extends State<LocalARViewer>
                     },
                     backgroundColor: Theme.of(context).primaryColor,
                     icon: _showSettings ? Icons.close : Icons.settings,
-                    tooltip: _showSettings ? 'Close Settings' : 'Model Settings',
+                    tooltip: _showSettings
+                        ? 'Close Settings'
+                        : 'Model Settings',
                   ),
                 ],
               ),
@@ -985,7 +989,7 @@ class _LocalARViewerState extends State<LocalARViewer>
   void _updateModelScaleDebounced() {
     // Cancel previous timer if still running
     _scaleDebounceTimer?.cancel();
-    
+
     // Start new timer with 300ms delay
     _scaleDebounceTimer = Timer(const Duration(milliseconds: 300), () {
       if (!_isDisposed && mounted) {
@@ -1015,13 +1019,13 @@ class _LocalARViewerState extends State<LocalARViewer>
       // Small delay to ensure removal is processed
       await Future.delayed(
         const Duration(milliseconds: 100),
-      );      // Create a new node with updated scale (use cached path)
+      ); // Create a new node with updated scale (use cached path)
       final newNode = ARNode(
         type: NodeType.localGLTF2,
         uri: _modelPathCached, // Use cached path for better performance
         scale: Vector3(_currentScale, _currentScale, _currentScale),
         position: Vector3(0.0, 0.0, 0.0),
-      );// Add the new node to the existing anchor
+      ); // Add the new node to the existing anchor
       bool? success = await arObjectManager!.addNode(
         newNode,
         planeAnchor: anchor as ARPlaneAnchor,
