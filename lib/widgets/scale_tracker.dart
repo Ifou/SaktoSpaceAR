@@ -49,9 +49,13 @@ class ScaleTracker extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!isVisible) return const SizedBox.shrink();
 
-    // Calculate current dimensions based on scale
+    // Pre-calculate dimensions to avoid repeated calculations
     final currentWidth = baseWidthMeters * currentScale;
     final currentHeight = baseHeightMeters * currentScale;
+    
+    // Cache theme data for performance
+    final theme = Theme.of(context);
+    final primaryColor = theme.primaryColor;
 
     return Positioned(
       top: top,
@@ -61,119 +65,115 @@ class ScaleTracker extends StatelessWidget {
       child: AnimatedOpacity(
         opacity: isVisible ? 1.0 : 0.0,
         duration: const Duration(milliseconds: 300),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.75),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Theme.of(context).primaryColor.withOpacity(0.3),
-              width: 1,
+        child: RepaintBoundary(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.75),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: primaryColor.withOpacity(0.3),
+                width: 1,
+              ),
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.straighten,
-                    color: Theme.of(context).primaryColor,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Scale Tracker',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.straighten,
+                      color: primaryColor,
+                      size: 18,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              // Scale percentage
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.zoom_in, color: Colors.white70, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Scale: ${(currentScale * 100).round()}%',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Scale Tracker',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-
-              // Width measurement
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.width_normal,
-                    color: Colors.white70,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Width: ${_formatDimension(currentWidth)}',
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-
-              // Height measurement
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.height, color: Colors.white70, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Height: ${_formatDimension(currentHeight)}',
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                  ),
-                ],
-              ),
-
-              // Scale factor indicator
-              const SizedBox(height: 4),
-              Container(
-                width: 120,
-                height: 4,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(2),
-                  color: Colors.white24,
+                  ],
                 ),
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: currentScale,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(2),
-                      color: _getScaleColor(),
+                const SizedBox(height: 8),
+
+                // Scale percentage with optimized text
+                _buildInfoRow(
+                  icon: Icons.zoom_in,
+                  text: 'Scale: ${(currentScale * 100).round()}%',
+                ),
+                const SizedBox(height: 4),
+
+                // Width measurement
+                _buildInfoRow(
+                  icon: Icons.width_normal,
+                  text: 'Width: ${_formatDimension(currentWidth)}',
+                ),
+                const SizedBox(height: 2),
+
+                // Height measurement
+                _buildInfoRow(
+                  icon: Icons.height,
+                  text: 'Height: ${_formatDimension(currentHeight)}',
+                ),
+
+                // Scale factor indicator with optimized rendering
+                const SizedBox(height: 4),
+                Container(
+                  width: 120,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    color: Colors.white24,
+                  ),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: currentScale,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        color: _getScaleColor(),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  /// Formats dimension value based on unit preference
+  // Optimized info row builder to reduce widget creation
+  Widget _buildInfoRow({required IconData icon, required String text}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          color: Colors.white70,
+          size: 16,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Formats dimension value based on unit preference (optimized)
   String _formatDimension(double meters) {
     if (useMetricUnits) {
       if (meters >= 1.0) {

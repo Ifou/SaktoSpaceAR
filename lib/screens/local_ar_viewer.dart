@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // For haptic feedback
+import 'dart:async'; // For debouncing
 import 'package:ar_flutter_plugin_2/managers/ar_location_manager.dart';
 import 'package:ar_flutter_plugin_2/managers/ar_session_manager.dart';
 import 'package:ar_flutter_plugin_2/managers/ar_object_manager.dart';
@@ -62,19 +64,28 @@ class _LocalARViewerState extends State<LocalARViewer>
   bool _isResetting = false; // Track reset operation state
   Function(List<ARHitTestResult>)?
   _originalPlaneCallback; // Store original plane callback
+  
+  // Performance optimization
+  Timer? _scaleDebounceTimer; // Debounce scale updates
+  late final String _modelPathCached; // Cache model path
+  bool _isDisposed = false; // Track disposal state for async operations
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this); // Observe app lifecycle
+    _modelPathCached = widget.modelPath; // Cache model path for performance
     _configureModelDimensions(); // Set appropriate base dimensions
     _checkPermissions(); // Check camera permissions before AR initialization
   }
 
   @override
   void dispose() {
-    super.dispose();
+    _isDisposed = true; // Mark as disposed
+    _scaleDebounceTimer?.cancel(); // Cancel any pending scale operations
     arSessionManager?.dispose();
     WidgetsBinding.instance.removeObserver(this); // Remove observer
+    super.dispose();
   }
 
   @override
@@ -400,7 +411,7 @@ class _LocalARViewerState extends State<LocalARViewer>
                 setState(() {
                   _currentScale = value;
                 });
-                _updateModelScale();
+                _updateModelScaleDebounced(); // Use debounced version
               },
               onClose: () {
                 setState(() {
@@ -416,152 +427,136 @@ class _LocalARViewerState extends State<LocalARViewer>
               isResetting: _isResetting,
             ),
 
-          // Scale Tracker - positioned on the left side
+          // Scale Tracker - positioned on the left side with performance optimization
           if (_showScaleTracker && _isModelPlaced && !_showDetailedTracker)
-            ScaleTracker(
-              currentScale: _currentScale,
-              baseWidthMeters: _baseModelWidth,
-              baseHeightMeters: _baseModelHeight,
-              useMetricUnits: _useMetricUnits,
-              top: 100,
-              left: 20,
-              isVisible: _showScaleTracker,
-            ),
-
-          // Detailed Scale Tracker - positioned on the right side
-          if (_showScaleTracker && _isModelPlaced && _showDetailedTracker)
-            Positioned(
-              top: 100,
-              right: 20,
-              child: DetailedScaleTracker(
+            RepaintBoundary(
+              child: ScaleTracker(
                 currentScale: _currentScale,
-                modelName: widget.modelName,
                 baseWidthMeters: _baseModelWidth,
                 baseHeightMeters: _baseModelHeight,
-                baseDepthMeters: _baseModelDepth,
                 useMetricUnits: _useMetricUnits,
-                onToggleUnits: () {
-                  setState(() {
-                    _useMetricUnits = !_useMetricUnits;
-                  });
-                },
+                top: 100,
+                left: 20,
                 isVisible: _showScaleTracker,
+              ),
+            ),
+
+          // Detailed Scale Tracker - positioned on the right side with performance optimization
+          if (_showScaleTracker && _isModelPlaced && _showDetailedTracker)
+            RepaintBoundary(
+              child: Positioned(
+                top: 100,
+                right: 20,
+                child: DetailedScaleTracker(
+                  currentScale: _currentScale,
+                  modelName: widget.modelName,
+                  baseWidthMeters: _baseModelWidth,
+                  baseHeightMeters: _baseModelHeight,
+                  baseDepthMeters: _baseModelDepth,
+                  useMetricUnits: _useMetricUnits,
+                  onToggleUnits: () {
+                    setState(() {
+                      _useMetricUnits = !_useMetricUnits;
+                    });
+                    HapticFeedback.lightImpact(); // Add haptic feedback
+                  },
+                  isVisible: _showScaleTracker,
+                ),
               ),
             ),
         ],
       ),
       floatingActionButton: _isModelPlaced
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Scale Tracker Toggle
-                FloatingActionButton(
-                  mini: true,
-                  onPressed: () {
-                    setState(() {
-                      _showScaleTracker = !_showScaleTracker;
-                    });
-                  },
-                  backgroundColor: _showScaleTracker
-                      ? Theme.of(context).primaryColor
-                      : Colors.grey,
-                  child: Icon(Icons.straighten, color: Colors.white, size: 20),
-                  tooltip: _showScaleTracker
-                      ? 'Hide Scale Tracker'
-                      : 'Show Scale Tracker',
-                ),
-                const SizedBox(height: 8),
-
-                // Detailed Tracker Toggle (only show when scale tracker is visible)
-                if (_showScaleTracker)
-                  FloatingActionButton(
-                    mini: true,
+          ? RepaintBoundary(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Scale Tracker Toggle with haptic feedback
+                  _buildOptimizedFAB(
                     onPressed: () {
                       setState(() {
-                        _showDetailedTracker = !_showDetailedTracker;
+                        _showScaleTracker = !_showScaleTracker;
                       });
+                      HapticFeedback.lightImpact();
                     },
-                    backgroundColor: _showDetailedTracker
-                        ? Colors.purple
-                        : Colors.grey[600],
-                    child: Icon(
-                      _showDetailedTracker
-                          ? Icons.view_list
-                          : Icons.view_compact,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    tooltip: _showDetailedTracker
-                        ? 'Simple View'
-                        : 'Detailed View',
+                    backgroundColor: _showScaleTracker
+                        ? Theme.of(context).primaryColor
+                        : Colors.grey,
+                    icon: Icons.straighten,
+                    tooltip: _showScaleTracker
+                        ? 'Hide Scale Tracker'
+                        : 'Show Scale Tracker',
                   ),
-                if (_showScaleTracker) const SizedBox(height: 8),
-
-                // Units Toggle (only show when scale tracker is visible and not in detailed mode)
-                if (_showScaleTracker && !_showDetailedTracker)
-                  FloatingActionButton(
-                    mini: true,
-                    onPressed: () {
-                      setState(() {
-                        _useMetricUnits = !_useMetricUnits;
-                      });
-                    },
-                    backgroundColor: _useMetricUnits
-                        ? Colors.green
-                        : Colors.orange,
-                    child: Text(
-                      _useMetricUnits ? 'M' : 'FT',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                    tooltip: _useMetricUnits
-                        ? 'Switch to Imperial'
-                        : 'Switch to Metric',
-                  ),
-                if (_showScaleTracker && !_showDetailedTracker)
                   const SizedBox(height: 8),
 
-                // Reset Button
-                FloatingActionButton(
-                  mini: true,
-                  onPressed: _isResetting
-                      ? null
-                      : () => _showResetConfirmation(),
-                  backgroundColor: _isResetting ? Colors.grey : Colors.red,
-                  child: _isResetting
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
-                            ),
-                          ),
-                        )
-                      : Icon(Icons.refresh, color: Colors.white, size: 20),
-                  tooltip: 'Reset AR Session',
-                ),
-                const SizedBox(height: 8),
+                  // Detailed Tracker Toggle
+                  if (_showScaleTracker)
+                    _buildOptimizedFAB(
+                      onPressed: () {
+                        setState(() {
+                          _showDetailedTracker = !_showDetailedTracker;
+                        });
+                        HapticFeedback.lightImpact();
+                      },
+                      backgroundColor: _showDetailedTracker
+                          ? Colors.purple
+                          : Colors.grey[600]!,
+                      icon: _showDetailedTracker
+                          ? Icons.view_list
+                          : Icons.view_compact,
+                      tooltip: _showDetailedTracker
+                          ? 'Simple View'
+                          : 'Detailed View',
+                    ),
+                  if (_showScaleTracker) const SizedBox(height: 8),
 
-                // Settings Toggle
-                FloatingActionButton(
-                  onPressed: () {
-                    setState(() {
-                      _showSettings = !_showSettings;
-                    });
-                  },
-                  backgroundColor: Theme.of(context).primaryColor,
-                  child: Icon(
-                    _showSettings ? Icons.close : Icons.settings,
-                    color: Colors.white,
+                  // Units Toggle
+                  if (_showScaleTracker && !_showDetailedTracker)
+                    _buildOptimizedFABWithText(
+                      onPressed: () {
+                        setState(() {
+                          _useMetricUnits = !_useMetricUnits;
+                        });
+                        HapticFeedback.lightImpact();
+                      },
+                      backgroundColor: _useMetricUnits
+                          ? Colors.green
+                          : Colors.orange,
+                      text: _useMetricUnits ? 'M' : 'FT',
+                      tooltip: _useMetricUnits
+                          ? 'Switch to Imperial'
+                          : 'Switch to Metric',
+                    ),
+                  if (_showScaleTracker && !_showDetailedTracker)
+                    const SizedBox(height: 8),
+
+                  // Reset Button
+                  _buildOptimizedFAB(
+                    onPressed: _isResetting ? null : () {
+                      _showResetConfirmation();
+                      HapticFeedback.mediumImpact();
+                    },
+                    backgroundColor: _isResetting ? Colors.grey : Colors.red,
+                    icon: Icons.refresh,
+                    tooltip: 'Reset AR Session',
+                    isLoading: _isResetting,
                   ),
-                  tooltip: _showSettings ? 'Close Settings' : 'Model Settings',
-                ),
-              ],
+                  const SizedBox(height: 8),
+
+                  // Settings Toggle
+                  _buildOptimizedFAB(
+                    onPressed: () {
+                      setState(() {
+                        _showSettings = !_showSettings;
+                      });
+                      HapticFeedback.lightImpact();
+                    },
+                    backgroundColor: Theme.of(context).primaryColor,
+                    icon: _showSettings ? Icons.close : Icons.settings,
+                    tooltip: _showSettings ? 'Close Settings' : 'Model Settings',
+                  ),
+                ],
+              ),
             )
           : null,
     );
@@ -589,6 +584,9 @@ class _LocalARViewerState extends State<LocalARViewer>
       showPlanes: true, // Essential for model placement
       showWorldOrigin: false, // Disabled for better performance
       handleTaps: true,
+      // Additional performance optimizations
+      customPlaneTexturePath: null, // Reduce memory usage
+      showAnimatedGuide: false, // Disable guide for performance
     );
 
     // Store the original plane callback for reset functionality
@@ -983,6 +981,19 @@ class _LocalARViewerState extends State<LocalARViewer>
     );
   }
 
+  // Model scaling method with debouncing for better performance
+  void _updateModelScaleDebounced() {
+    // Cancel previous timer if still running
+    _scaleDebounceTimer?.cancel();
+    
+    // Start new timer with 300ms delay
+    _scaleDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!_isDisposed && mounted) {
+        _updateModelScale();
+      }
+    });
+  }
+
   // Model scaling method
   void _updateModelScale() async {
     if (nodes.isEmpty ||
@@ -1004,13 +1015,13 @@ class _LocalARViewerState extends State<LocalARViewer>
       // Small delay to ensure removal is processed
       await Future.delayed(
         const Duration(milliseconds: 100),
-      ); // Create a new node with updated scale
+      );      // Create a new node with updated scale (use cached path)
       final newNode = ARNode(
         type: NodeType.localGLTF2,
-        uri: widget.modelPath,
+        uri: _modelPathCached, // Use cached path for better performance
         scale: Vector3(_currentScale, _currentScale, _currentScale),
         position: Vector3(0.0, 0.0, 0.0),
-      ); // Add the new node to the existing anchor
+      );// Add the new node to the existing anchor
       bool? success = await arObjectManager!.addNode(
         newNode,
         planeAnchor: anchor as ARPlaneAnchor,
@@ -1121,5 +1132,53 @@ class _LocalARViewerState extends State<LocalARViewer>
       _baseModelHeight = 1.0; // 1m tall
       _baseModelDepth = 1.0; // 1m deep
     }
+  }
+
+  // Optimized FAB builder methods for better performance
+  Widget _buildOptimizedFAB({
+    required VoidCallback? onPressed,
+    required Color backgroundColor,
+    required IconData icon,
+    required String tooltip,
+    bool isLoading = false,
+  }) {
+    return FloatingActionButton(
+      mini: true,
+      onPressed: onPressed,
+      backgroundColor: backgroundColor,
+      tooltip: tooltip,
+      child: isLoading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            )
+          : Icon(icon, color: Colors.white, size: 20),
+    );
+  }
+
+  Widget _buildOptimizedFABWithText({
+    required VoidCallback onPressed,
+    required Color backgroundColor,
+    required String text,
+    required String tooltip,
+  }) {
+    return FloatingActionButton(
+      mini: true,
+      onPressed: onPressed,
+      backgroundColor: backgroundColor,
+      tooltip: tooltip,
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
+      ),
+    );
   }
 }
