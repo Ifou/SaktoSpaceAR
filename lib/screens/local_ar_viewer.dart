@@ -51,6 +51,10 @@ class _LocalARViewerState extends State<LocalARViewer>
   bool _showSettings = false; // Track settings panel visibility
   bool _isScaling = false; // Prevent concurrent scaling operations
 
+  // X-axis rotation configuration
+  double _currentRotationX = 0.0; // Track current X-axis rotation in degrees
+  bool _isRotating = false; // Prevent concurrent rotation operations
+
   // Scale tracker configuration
   bool _showScaleTracker = true; // Show/hide scale tracker
   bool _useMetricUnits = true; // Toggle between metric and imperial units
@@ -80,6 +84,7 @@ class _LocalARViewerState extends State<LocalARViewer>
   void dispose() {
     _isDisposed = true; // Mark as disposed
     _scaleDebounceTimer?.cancel(); // Cancel any pending scale operations
+    _rotationDebounceTimer?.cancel(); // Cancel any pending rotation operations
     arSessionManager?.dispose();
     WidgetsBinding.instance.removeObserver(this); // Remove observer
     super.dispose();
@@ -279,126 +284,7 @@ class _LocalARViewerState extends State<LocalARViewer>
                 ),
               ),
             ), // Model info and controls - hide controls after model is placed
-          if (!_isModelPlaced)
-            Positioned(
-              bottom: 40,
-              left: 20,
-              right: 20,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Model info card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.view_in_ar,
-                          color: Theme.of(context).primaryColor,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                widget.modelName,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                nodes.isEmpty
-                                    ? 'Ready to place'
-                                    : 'Object placed successfully!',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: nodes.isEmpty
-                                      ? Colors.grey[600]
-                                      : Colors.green[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // Success message after model is placed
-          if (_isModelPlaced)
-            Positioned(
-              bottom: 40,
-              left: 20,
-              right: 20,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${widget.modelName} Placed!',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const Text(
-                            'Model successfully placed in AR space',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ), // Settings Panel
+          // Settings Panel
           if (_showSettings && _isModelPlaced)
             ARSettingsPanel(
               currentScale: _currentScale,
@@ -409,6 +295,13 @@ class _LocalARViewerState extends State<LocalARViewer>
                   _currentScale = value;
                 });
                 _updateModelScaleDebounced(); // Use debounced version
+              },
+              currentRotationX: _currentRotationX,
+              onRotationXChanged: (value) {
+                setState(() {
+                  _currentRotationX = value;
+                });
+                _updateModelRotationDebounced(); // Use debounced version
               },
               onClose: () {
                 setState(() {
@@ -427,14 +320,14 @@ class _LocalARViewerState extends State<LocalARViewer>
           // Scale Tracker - minimal safe implementation
           if (_showScaleTracker && _isModelPlaced)
             Positioned(
-              top: 100,
+              top: 540,
               left: 20,
               child: IgnorePointer(
                 child: Material(
                   color: Colors.transparent,
                   child: Container(
                     width: 160,
-                    height: 100,
+                    height: 120, // Increased height to accommodate rotation
                     decoration: BoxDecoration(
                       color: const Color(0xDD000000),
                       borderRadius: BorderRadius.circular(8),
@@ -447,11 +340,14 @@ class _LocalARViewerState extends State<LocalARViewer>
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.straighten, 
-                                     color: Colors.white, size: 14),
+                            const Icon(
+                              Icons.straighten,
+                              color: Colors.white,
+                              size: 14,
+                            ),
                             const SizedBox(width: 6),
                             const Text(
-                              'Scale Tracker',
+                              'Model Tracker',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -463,6 +359,13 @@ class _LocalARViewerState extends State<LocalARViewer>
                         const SizedBox(height: 6),
                         Text(
                           'Scale: ${(_currentScale * 100).round()}%',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                          ),
+                        ),
+                        Text(
+                          'Rotation: ${_currentRotationX.round()}°',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -508,8 +411,8 @@ class _LocalARViewerState extends State<LocalARViewer>
                         : Colors.grey,
                     icon: Icons.straighten,
                     tooltip: _showScaleTracker
-                        ? 'Hide Scale Tracker'
-                        : 'Show Scale Tracker',
+                        ? 'Hide Model Tracker'
+                        : 'Show Model Tracker',
                   ),
                   const SizedBox(height: 8),
 
@@ -692,6 +595,9 @@ class _LocalARViewerState extends State<LocalARViewer>
         anchors.add(
           newAnchor,
         ); // Create node with optimized settings for better performance
+        // Convert degrees to radians for X-axis rotation
+        final rotationRadians = _currentRotationX * (3.14159 / 180.0);
+
         var newNode = ARNode(
           type: NodeType.localGLTF2,
           uri: widget.modelPath,
@@ -701,6 +607,11 @@ class _LocalARViewerState extends State<LocalARViewer>
             _currentScale,
           ), // Use current scale variable
           position: Vector3(0.0, 0.0, 0.0),
+          eulerAngles: Vector3(
+            rotationRadians,
+            0.0,
+            0.0,
+          ), // X-axis rotation using euler angles
         );
 
         // Add the node to the anchor with timeout to prevent hanging
@@ -871,12 +782,14 @@ class _LocalARViewerState extends State<LocalARViewer>
         _isModelPlaced = false;
         _isResetting = false;
         _currentScale = 0.15; // Reset scale to default
+        _currentRotationX = 0.0; // Reset rotation to default
         _showSettings = false; // Close settings panel
 
         // Reset any other states as needed
         _isPlacingModel = false;
         _isModelLoading = false;
         _isScaling = false;
+        _isRotating = false;
       });
 
       // 5. Show success feedback
@@ -946,6 +859,7 @@ class _LocalARViewerState extends State<LocalARViewer>
               _buildResetFeature('• Remove the current model'),
               _buildResetFeature('• Re-enable plane detection'),
               _buildResetFeature('• Reset scale to default'),
+              _buildResetFeature('• Reset rotation to 0°'),
               _buildResetFeature('• Clear all AR anchors'),
               SizedBox(height: 12),
               Text(
@@ -1019,14 +933,22 @@ class _LocalARViewerState extends State<LocalARViewer>
       await arObjectManager!.removeNode(oldNode);
 
       // Small delay to ensure removal is processed
-      await Future.delayed(
-        const Duration(milliseconds: 100),
-      ); // Create a new node with updated scale (use cached path)
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Convert degrees to radians for X-axis rotation
+      final rotationRadians = _currentRotationX * (3.14159 / 180.0);
+
+      // Create a new node with updated scale and current rotation (use cached path)
       final newNode = ARNode(
         type: NodeType.localGLTF2,
         uri: _modelPathCached, // Use cached path for better performance
         scale: Vector3(_currentScale, _currentScale, _currentScale),
         position: Vector3(0.0, 0.0, 0.0),
+        eulerAngles: Vector3(
+          rotationRadians,
+          0.0,
+          0.0,
+        ), // X-axis rotation using euler angles
       ); // Add the new node to the existing anchor
       bool? success = await arObjectManager!.addNode(
         newNode,
@@ -1046,6 +968,80 @@ class _LocalARViewerState extends State<LocalARViewer>
       _showSnackBar('Failed to scale model', Colors.red);
     } finally {
       _isScaling = false; // Reset the flag
+    }
+  }
+
+  // Model X-axis rotation method with debouncing for better performance
+  Timer? _rotationDebounceTimer; // Debounce rotation updates
+
+  void _updateModelRotationDebounced() {
+    // Cancel previous timer if still running
+    _rotationDebounceTimer?.cancel();
+
+    // Start new timer with 300ms delay
+    _rotationDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!_isDisposed && mounted) {
+        _updateModelRotation();
+      }
+    });
+  }
+
+  // Model X-axis rotation method
+  void _updateModelRotation() async {
+    if (nodes.isEmpty ||
+        arObjectManager == null ||
+        anchors.isEmpty ||
+        _isRotating)
+      return;
+
+    _isRotating = true; // Prevent concurrent rotation operations
+
+    try {
+      // Since updateNode might not be available, we'll recreate the node with new rotation
+      final oldNode = nodes.first;
+      final anchor = anchors.first;
+
+      // Remove the old node and wait for completion
+      await arObjectManager!.removeNode(oldNode);
+
+      // Small delay to ensure removal is processed
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Convert degrees to radians for X-axis rotation
+      final rotationRadians = _currentRotationX * (3.14159 / 180.0);
+
+      // Create a new node with current scale and updated rotation (use cached path)
+      final newNode = ARNode(
+        type: NodeType.localGLTF2,
+        uri: _modelPathCached, // Use cached path for better performance
+        scale: Vector3(_currentScale, _currentScale, _currentScale),
+        position: Vector3(0.0, 0.0, 0.0),
+        eulerAngles: Vector3(
+          rotationRadians,
+          0.0,
+          0.0,
+        ), // X-axis rotation using euler angles
+      );
+
+      // Add the new node to the existing anchor
+      bool? success = await arObjectManager!.addNode(
+        newNode,
+        planeAnchor: anchor as ARPlaneAnchor,
+      );
+
+      if (success == true) {
+        // Update the nodes list only after successful addition
+        nodes[0] = newNode;
+      } else {
+        // If failed to add new node, add the old one back
+        await arObjectManager!.addNode(oldNode, planeAnchor: anchor);
+        _showSnackBar('Failed to rotate model', Colors.red);
+      }
+    } catch (e) {
+      print('Error updating model rotation: $e');
+      _showSnackBar('Failed to rotate model', Colors.red);
+    } finally {
+      _isRotating = false; // Reset the flag
     }
   }
 

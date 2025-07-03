@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 /// A reusable settings panel widget for AR model configuration.
 ///
 /// This widget provides a modal overlay with controls for adjusting
-/// AR model properties like scale, and can be extended for additional
+/// AR model properties like scale and rotation, and can be extended for additional
 /// settings in the future.
 class ARSettingsPanel extends StatelessWidget {
   /// Current scale value of the AR model (0.0 to 1.0)
@@ -17,6 +17,12 @@ class ARSettingsPanel extends StatelessWidget {
 
   /// Callback function called when scale value changes
   final Function(double) onScaleChanged;
+
+  /// Current X-axis rotation value in degrees (0.0 to 360.0)
+  final double currentRotationX;
+
+  /// Callback function called when X-axis rotation value changes
+  final Function(double) onRotationXChanged;
 
   /// Callback function called when panel should be closed
   final VoidCallback onClose;
@@ -33,6 +39,8 @@ class ARSettingsPanel extends StatelessWidget {
     required this.minScale,
     required this.maxScale,
     required this.onScaleChanged,
+    required this.currentRotationX,
+    required this.onRotationXChanged,
     required this.onClose,
     this.onReset,
     this.isResetting = false,
@@ -130,6 +138,53 @@ class ARSettingsPanel extends StatelessWidget {
                         ),
                         Text(
                           'Current: ${(currentScale * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).primaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // X-axis rotation slider
+                        const Text(
+                          'X-Axis Rotation',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Text(
+                              '0°',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            Expanded(
+                              child: Slider(
+                                value: currentRotationX,
+                                min: 0.0,
+                                max: 360.0,
+                                divisions: 36, // 10-degree increments
+                                activeColor: Theme.of(context).primaryColor,
+                                onChanged: onRotationXChanged,
+                              ),
+                            ),
+                            const Text(
+                              '360°',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          'Current: ${currentRotationX.round()}°',
                           style: TextStyle(
                             fontSize: 14,
                             color: Theme.of(context).primaryColor,
