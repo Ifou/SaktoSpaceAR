@@ -18,10 +18,10 @@ class ARSettingsPanel extends StatelessWidget {
   /// Callback function called when scale value changes
   final Function(double) onScaleChanged;
 
-  /// Current X-axis rotation value in degrees (0.0 to 360.0)
+  /// Current Y-axis rotation value in degrees (0.0 to 360.0)
   final double currentRotationX;
 
-  /// Callback function called when X-axis rotation value changes
+  /// Callback function called when Y-axis rotation value changes
   final Function(double) onRotationXChanged;
 
   /// Callback function called when panel should be closed
@@ -146,9 +146,9 @@ class ARSettingsPanel extends StatelessWidget {
                         ),
                         const SizedBox(height: 20),
 
-                        // X-axis rotation slider
+                        // Y-axis rotation slider
                         const Text(
-                          'X-Axis Rotation',
+                          'Y-Axis Rotation',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

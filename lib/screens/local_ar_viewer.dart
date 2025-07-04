@@ -51,8 +51,8 @@ class _LocalARViewerState extends State<LocalARViewer>
   bool _showSettings = false; // Track settings panel visibility
   bool _isScaling = false; // Prevent concurrent scaling operations
 
-  // X-axis rotation configuration
-  double _currentRotationX = 0.0; // Track current X-axis rotation in degrees
+  // Y-axis rotation configuration
+  double _currentRotationY = 0.0; // Track current Y-axis rotation in degrees
   bool _isRotating = false; // Prevent concurrent rotation operations
 
   // Scale tracker configuration
@@ -296,10 +296,11 @@ class _LocalARViewerState extends State<LocalARViewer>
                 });
                 _updateModelScaleDebounced(); // Use debounced version
               },
-              currentRotationX: _currentRotationX,
+              currentRotationX: _currentRotationY,
               onRotationXChanged: (value) {
+                print('🎛️ Rotation slider changed to: $value degrees');
                 setState(() {
-                  _currentRotationX = value;
+                  _currentRotationY = value;
                 });
                 _updateModelRotationDebounced(); // Use debounced version
               },
@@ -365,7 +366,7 @@ class _LocalARViewerState extends State<LocalARViewer>
                           ),
                         ),
                         Text(
-                          'Rotation: ${_currentRotationX.round()}°',
+                          'Rotation: ${_currentRotationY.round()}°',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -413,6 +414,22 @@ class _LocalARViewerState extends State<LocalARViewer>
                     tooltip: _showScaleTracker
                         ? 'Hide Model Tracker'
                         : 'Show Model Tracker',
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Test Rotation Button (for debugging)
+                  _buildOptimizedFAB(
+                    onPressed: () {
+                      print('🧪 Test rotation button pressed');
+                      setState(() {
+                        _currentRotationY = (_currentRotationY + 45) % 360;
+                      });
+                      _updateModelRotationDebounced();
+                      HapticFeedback.lightImpact();
+                    },
+                    backgroundColor: Colors.orange,
+                    icon: Icons.rotate_right,
+                    tooltip: 'Test Rotation (+45°)',
                   ),
                   const SizedBox(height: 8),
 
@@ -595,8 +612,8 @@ class _LocalARViewerState extends State<LocalARViewer>
         anchors.add(
           newAnchor,
         ); // Create node with optimized settings for better performance
-        // Convert degrees to radians for X-axis rotation
-        final rotationRadians = _currentRotationX * (3.14159 / 180.0);
+        // Convert degrees to radians for Y-axis rotation
+        final rotationRadians = _currentRotationY * (3.14159 / 180.0);
 
         var newNode = ARNode(
           type: NodeType.localGLTF2,
@@ -608,10 +625,10 @@ class _LocalARViewerState extends State<LocalARViewer>
           ), // Use current scale variable
           position: Vector3(0.0, 0.0, 0.0),
           eulerAngles: Vector3(
+            0.0,
             rotationRadians,
             0.0,
-            0.0,
-          ), // X-axis rotation using euler angles
+          ), // Y-axis rotation using euler angles
         );
 
         // Add the node to the anchor with timeout to prevent hanging
@@ -782,7 +799,7 @@ class _LocalARViewerState extends State<LocalARViewer>
         _isModelPlaced = false;
         _isResetting = false;
         _currentScale = 0.15; // Reset scale to default
-        _currentRotationX = 0.0; // Reset rotation to default
+        _currentRotationY = 0.0; // Reset rotation to default
         _showSettings = false; // Close settings panel
 
         // Reset any other states as needed
@@ -935,8 +952,8 @@ class _LocalARViewerState extends State<LocalARViewer>
       // Small delay to ensure removal is processed
       await Future.delayed(const Duration(milliseconds: 100));
 
-      // Convert degrees to radians for X-axis rotation
-      final rotationRadians = _currentRotationX * (3.14159 / 180.0);
+      // Convert degrees to radians for Y-axis rotation
+      final rotationRadians = _currentRotationY * (3.14159 / 180.0);
 
       // Create a new node with updated scale and current rotation (use cached path)
       final newNode = ARNode(
@@ -945,10 +962,10 @@ class _LocalARViewerState extends State<LocalARViewer>
         scale: Vector3(_currentScale, _currentScale, _currentScale),
         position: Vector3(0.0, 0.0, 0.0),
         eulerAngles: Vector3(
+          0.0,
           rotationRadians,
           0.0,
-          0.0,
-        ), // X-axis rotation using euler angles
+        ), // Y-axis rotation using euler angles
       ); // Add the new node to the existing anchor
       bool? success = await arObjectManager!.addNode(
         newNode,
@@ -971,23 +988,30 @@ class _LocalARViewerState extends State<LocalARViewer>
     }
   }
 
-  // Model X-axis rotation method with debouncing for better performance
+  // Model Y-axis rotation method with debouncing for better performance
   Timer? _rotationDebounceTimer; // Debounce rotation updates
 
   void _updateModelRotationDebounced() {
+    print('🔄 Rotation change detected, debouncing...');
     // Cancel previous timer if still running
     _rotationDebounceTimer?.cancel();
 
     // Start new timer with 300ms delay
     _rotationDebounceTimer = Timer(const Duration(milliseconds: 300), () {
       if (!_isDisposed && mounted) {
+        print('🔄 Debounce timer triggered, calling _updateModelRotation');
         _updateModelRotation();
       }
     });
   }
 
-  // Model X-axis rotation method
+  // Model Y-axis rotation method
   void _updateModelRotation() async {
+    // Add debugging to see why rotation might not work
+    print(
+      '🔄 Attempting rotation update - Nodes: ${nodes.length}, Anchors: ${anchors.length}, IsRotating: $_isRotating, ModelPlaced: $_isModelPlaced',
+    );
+
     if (nodes.isEmpty ||
         arObjectManager == null ||
         anchors.isEmpty ||
@@ -1001,14 +1025,18 @@ class _LocalARViewerState extends State<LocalARViewer>
       final oldNode = nodes.first;
       final anchor = anchors.first;
 
+      print('🔄 Removing old node for rotation update');
       // Remove the old node and wait for completion
       await arObjectManager!.removeNode(oldNode);
 
       // Small delay to ensure removal is processed
       await Future.delayed(const Duration(milliseconds: 100));
 
-      // Convert degrees to radians for X-axis rotation
-      final rotationRadians = _currentRotationX * (3.14159 / 180.0);
+      // Convert degrees to radians for Y-axis rotation
+      final rotationRadians = _currentRotationY * (3.14159 / 180.0);
+      print(
+        '🔄 Creating new node with Y-axis rotation: ${_currentRotationY}° (${rotationRadians} radians)',
+      );
 
       // Create a new node with current scale and updated rotation (use cached path)
       final newNode = ARNode(
@@ -1017,22 +1045,26 @@ class _LocalARViewerState extends State<LocalARViewer>
         scale: Vector3(_currentScale, _currentScale, _currentScale),
         position: Vector3(0.0, 0.0, 0.0),
         eulerAngles: Vector3(
+          0.0,
           rotationRadians,
           0.0,
-          0.0,
-        ), // X-axis rotation using euler angles
+        ), // Y-axis rotation using euler angles
       );
 
+      print('🔄 Attempting to add new node to anchor...');
       // Add the new node to the existing anchor
       bool? success = await arObjectManager!.addNode(
         newNode,
         planeAnchor: anchor as ARPlaneAnchor,
       );
 
+      print('🔄 Node addition result: $success');
       if (success == true) {
         // Update the nodes list only after successful addition
         nodes[0] = newNode;
+        print('✅ Rotation update completed successfully');
       } else {
+        print('❌ Failed to add rotated node, restoring original');
         // If failed to add new node, add the old one back
         await arObjectManager!.addNode(oldNode, planeAnchor: anchor);
         _showSnackBar('Failed to rotate model', Colors.red);
